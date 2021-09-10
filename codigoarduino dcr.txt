@@ -1,0 +1,153 @@
+//Codigo Arduino DCR
+//************Declaração de bibliotecas e variáveis************
+#include "ACS712.h"
+#include <LiquidCrystal.h>
+LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
+ACS712 sensorGeral(ACS712_30A, A0);
+ACS712 sensorCozinha(ACS712_30A, A1);
+ACS712 sensorSala(ACS712_30A, A2);
+ACS712 sensorQuarto(ACS712_30A, A3);
+float Tensao = 0;
+float IGeral = 0;
+float ICozinha = 0;
+float ISala = 0;
+float IQuarto = 0;
+float PotenciaGeral = 0;
+float PotenciaCozinha = 0;
+float PotenciaSala = 0;
+float PotenciaQuarto = 0;
+int releGeral = 7;
+int releCozinha = 8;
+int releSala = 9;
+int releQuarto = 10;
+int armareles;
+//***************Setup***************
+void setup() {
+Serial.begin(9600);
+pinMode(releGeral, OUTPUT);
+pinMode(releCozinha, OUTPUT);
+pinMode(releSala, OUTPUT);
+pinMode(releQuarto, OUTPUT);
+sensorGeral.calibrate();
+delay(500);
+sensorCozinha.calibrate();
+delay(500);
+sensorSala.calibrate();
+delay(500);
+sensorQuarto.calibrate();
+delay(500);
+Serial.print("Calibrados!"); Serial.print("\n");
+}
+//***************Loop***************
+void loop() {
+//***************Controle dos reles***************
+if (Serial.available()) {
+armareles = Serial.read();
+//***************Geral com redundância***************
+if (armareles == 49) {
+digitalWrite(releGeral, HIGH);
+digitalWrite(releCozinha, HIGH);
+digitalWrite(releSala, HIGH);
+digitalWrite(releQuarto, HIGH);
+}
+if (armareles == 48) {
+digitalWrite(releGeral, LOW);
+digitalWrite(releCozinha, LOW);
+digitalWrite(releSala, LOW);
+digitalWrite(releQuarto, LOW);
+}
+//***************Cozinha***************
+if (armareles == 51) {
+digitalWrite(releCozinha, HIGH);
+}
+if (armareles == 50) {
+digitalWrite(releCozinha, LOW);
+}
+//***************Sala***************
+if (armareles == 53) {
+digitalWrite(releSala, HIGH);
+}
+if (armareles == 52) {
+digitalWrite(releSala, LOW);
+}
+//***************Quarto***************
+if (armareles == 55) {
+digitalWrite(releQuarto, HIGH);
+}
+if (armareles == 54) {
+digitalWrite(releQuarto, LOW);
+}
+}
+//***************Medição das Correntes***************
+int itercorrente = 5;
+IGeral = 0;
+ICozinha = 0;
+ISala = 0;
+IQuarto = 0;
+for(int contG = 0; contG < itercorrente; contG++){
+sensorGeral.calibrate();
+sensorCozinha.calibrate();
+sensorSala.calibrate();
+sensorQuarto.calibrate();
+delay(1);
+float MediaCorrenteGeral = sensorGeral.getCurrentAC(60);
+IGeral = IGeral + MediaCorrenteGeral;
+float MediaCorrenteCozinha = sensorCozinha.getCurrentAC(60);
+ICozinha = ICozinha + MediaCorrenteCozinha;
+float MediaCorrenteSala = sensorSala.getCurrentAC(60);
+ISala = ISala + MediaCorrenteSala;
+float MediaCorrenteQuarto = sensorQuarto.getCurrentAC(60);
+IQuarto = IQuarto + MediaCorrenteQuarto;
+delay(1);
+}
+IGeral = IGeral/itercorrente;
+if(IGeral <= 0.08){
+IGeral = 0;
+}
+ICozinha = ICozinha/itercorrente;
+if(ICozinha <= 0.08){
+ICozinha = 0;
+}
+ISala = ISala/itercorrente;
+if(ISala <= 0.08){
+ISala = 0;
+}
+IQuarto = IQuarto/itercorrente;
+if(IQuarto <= 0.08){
+IQuarto = 0;
+}
+//***************Medição de Tensão***************
+float mediatotal = 0;
+int itertensao = 1000;
+for(int cont = 0; cont < itertensao; cont++){
+float valortensao = analogRead(A4);
+mediatotal = mediatotal + valortensao;
+delay(1);
+}
+mediatotal = mediatotal/itertensao;
+Tensao = ((mediatotal*5)/1023)*46.7; //Fator de correção da tensão
+//***************Calculo das Potências***************
+PotenciaGeral = Tensao * IGeral;
+PotenciaCozinha = Tensao * ICozinha;
+PotenciaSala = Tensao * ISala;
+PotenciaQuarto = Tensao * IQuarto;
+//***************Tela LCD Interface***************
+lcd.begin(16, 2);
+if (PotenciaGeral <= 999){
+lcd.print("Pot = "); lcd.print(PotenciaGeral); lcd.print("W");
+}
+else {
+float kW = PotenciaGeral/1000;
+lcd.print("Pot = "); lcd.print(kW); lcd.print("kW");
+}
+//***************Envio de dados via Serial***************
+Serial.print(Tensao); Serial.print(" ");
+Serial.print(IGeral); Serial.print(" ");
+Serial.print(ICozinha); Serial.print(" ");
+Serial.print(ISala); Serial.print(" ");
+Serial.print(IQuarto); Serial.print(" ");
+Serial.print(PotenciaGeral); Serial.print(" ");
+Serial.print(PotenciaCozinha); Serial.print(" ");
+Serial.print(PotenciaSala); Serial.print(" ");
+Serial.println(PotenciaQuarto);
+}
